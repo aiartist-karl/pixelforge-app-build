@@ -1,10 +1,10 @@
 /**
  * PixelForge AI — API 客户端
- * 对接代理站 http://36.134.216.154:8880
+ * 对接代理站 http://36.137.84.216:8880
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE = 'http://36.134.216.154:8880';
+const API_BASE = 'http://36.137.84.216:8880';
 const TOKEN_KEY = '@pixelforge:token';
 
 // ── Token 管理 ───────────────────────────────────────────────
