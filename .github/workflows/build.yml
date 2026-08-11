@@ -1,0 +1,142 @@
+name: Build Android APK & iOS IPA
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm install
+
+      - name: Expo Prebuild Android
+        run: npx expo prebuild --platform android --clean
+
+      - name: Fix Kotlin version
+        run: |
+          cd android
+          echo "android.kotlinVersion=1.9.25" >> gradle.properties
+          sed -i "s|classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')|classpath('org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.25')|g" build.gradle
+
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PixelForge-Android-APK
+          path: android/app/build/outputs/apk/release/*.apk
+          retention-days: 30
+
+  build-ios:
+    name: Build iOS IPA (unsigned)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm install
+
+      - name: Expo Prebuild iOS
+        run: npx expo prebuild --platform ios --clean
+
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install --repo-update
+
+      - name: Discover Xcode project
+        id: discover
+        run: |
+          cd ios
+          WORKSPACE=$(ls *.xcworkspace 2>/dev/null | head -1)
+          PROJECT=$(ls *.xcodeproj 2>/dev/null | head -1)
+          if [ -n "$WORKSPACE" ]; then
+            SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list -json 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['project']['schemes'][0])" 2>/dev/null || echo "")
+            echo "workspace=$WORKSPACE" >> $GITHUB_OUTPUT
+            echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
+            echo "type=workspace" >> $GITHUB_OUTPUT
+          elif [ -n "$PROJECT" ]; then
+            SCHEME=$(xcodebuild -project "$PROJECT" -list -json 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['project']['schemes'][0])" 2>/dev/null || echo "")
+            echo "project=$PROJECT" >> $GITHUB_OUTPUT
+            echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
+            echo "type=project" >> $GITHUB_OUTPUT
+          fi
+          echo "Discovered: workspace=$WORKSPACE project=$PROJECT scheme=$SCHEME"
+
+      - name: Build iOS unsigned
+        run: |
+          cd ios
+          SCHEME="${{ steps.discover.outputs.scheme }}"
+          if [ -z "$SCHEME" ]; then
+            # Fallback: try common scheme names
+            for S in "PixelForge AI" "PixelForgeAI" "pixelforgeapp" "PixelForgeApp"; do
+              if xcodebuild -workspace *.xcworkspace -scheme "$S" -showBuildSettings 2>/dev/null | head -1 | grep -q "Build"; then
+                SCHEME="$S"
+                break
+              fi
+            done
+          fi
+          echo "Building with scheme: $SCHEME"
+          
+          xcodebuild \
+            -workspace *.xcworkspace \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build
+
+      - name: Create unsigned IPA
+        run: |
+          APP_DIR=$(find ios/build/Build/Products/Release-iphoneos -name "*.app" -type d | head -1)
+          if [ -z "$APP_DIR" ]; then
+            echo "Error: .app not found"
+            find ios/build -name "*.app" -type d 2>/dev/null
+            exit 1
+          fi
+          echo "Found app: $APP_DIR"
+          mkdir -p /tmp/Payload
+          cp -r "$APP_DIR" /tmp/Payload/
+          cd /tmp
+          zip -r PixelForge-iOS-unsigned.ipa Payload
+          ls -la PixelForge-iOS-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PixelForge-iOS-IPA
+          path: /tmp/PixelForge-iOS-unsigned.ipa
+          retention-days: 30

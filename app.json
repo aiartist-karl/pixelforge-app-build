@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "PixelForge AI",
+    "slug": "pixelforge-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./src/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#ffffff",
+      "resizeMode": "contain",
+      "image": "./src/icon.png"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pixelforge.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "\u7528\u4e8e\u62cd\u6444\u53c2\u8003\u56fe\u7247\u8fdb\u884cAI\u521b\u4f5c",
+        "NSPhotoLibraryUsageDescription": "\u7528\u4e8e\u9009\u62e9\u53c2\u8003\u56fe\u7247\u8fdb\u884cAI\u521b\u4f5c",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        },
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./src/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.pixelforge.app",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE"
+      ]
+    },
+    "extra": {
+      "eas": {
+        "projectId": "9902ec8c-9582-4cfa-87bf-c09ecdbd46d4"
+      }
+    },
+    "owner": "ahuaj"
+  }
+}
