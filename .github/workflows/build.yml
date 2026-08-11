@@ -69,6 +69,9 @@ jobs:
       - name: Expo Prebuild iOS
         run: npx expo prebuild --platform ios --clean
 
+      - name: Export JS Bundle
+        run: npx expo export --platform ios --output-dir ios/build/bundle
+
       - name: Install CocoaPods
         run: |
           cd ios
@@ -77,51 +80,16 @@ jobs:
       - name: Build iOS unsigned
         run: |
           cd ios
-          # List available schemes
-          echo "=== Available schemes ==="
-          xcodebuild -workspace PixelForgeAI.xcworkspace -list 2>&1 || true
+          SCHEME="PixelForgeAI"
+          echo "Using scheme: $SCHEME"
           
-          # Try to find the correct scheme name
-          SCHEME=$(xcodebuild -workspace PixelForgeAI.xcworkspace -list -json 2>/dev/null | python3 -c "
-          import json, sys
-          try:
-              d = json.load(sys.stdin)
-              schemes = d.get('project', {}).get('schemes', [])
-              # Filter out Pods scheme
-              user_schemes = [s for s in schemes if s != 'Pods-PixelForgeAI']
-              if user_schemes:
-                  print(user_schemes[0])
-              elif schemes:
-                  print(schemes[0])
-          except Exception as e:
-              print(f'Error: {e}', file=sys.stderr)
-          " 2>/dev/null)
-          
-          echo "=== Using scheme: '$SCHEME' ==="
-          
-          # If scheme is still empty, use the workspace name as scheme
-          if [ -z "$SCHEME" ]; then
-            SCHEME="PixelForgeAI"
-            echo "Fallback scheme: $SCHEME"
-          fi
-          
-          xcodebuild \
-            -workspace PixelForgeAI.xcworkspace \
-            -scheme "$SCHEME" \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            build
+          xcodebuild             -workspace PixelForgeAI.xcworkspace             -scheme "$SCHEME"             -configuration Release             -destination 'generic/platform=iOS'             -derivedDataPath build             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=""             COMPILER_INDEX_STORE_ENABLE=NO             build
 
       - name: Create unsigned IPA
         run: |
           APP_DIR=$(find ios/build/Build/Products/Release-iphoneos -name "*.app" -type d | head -1)
           if [ -z "$APP_DIR" ]; then
-            echo "Error: .app not found, searching everywhere..."
+            echo "Error: .app not found"
             find ios/build -name "*.app" -type d 2>/dev/null
             exit 1
           fi
