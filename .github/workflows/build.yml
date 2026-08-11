@@ -74,42 +74,39 @@ jobs:
           cd ios
           pod install --repo-update
 
-      - name: Discover Xcode project
-        id: discover
-        run: |
-          cd ios
-          WORKSPACE=$(ls *.xcworkspace 2>/dev/null | head -1)
-          PROJECT=$(ls *.xcodeproj 2>/dev/null | head -1)
-          if [ -n "$WORKSPACE" ]; then
-            SCHEME=$(xcodebuild -workspace "$WORKSPACE" -list -json 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['project']['schemes'][0])" 2>/dev/null || echo "")
-            echo "workspace=$WORKSPACE" >> $GITHUB_OUTPUT
-            echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
-            echo "type=workspace" >> $GITHUB_OUTPUT
-          elif [ -n "$PROJECT" ]; then
-            SCHEME=$(xcodebuild -project "$PROJECT" -list -json 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['project']['schemes'][0])" 2>/dev/null || echo "")
-            echo "project=$PROJECT" >> $GITHUB_OUTPUT
-            echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
-            echo "type=project" >> $GITHUB_OUTPUT
-          fi
-          echo "Discovered: workspace=$WORKSPACE project=$PROJECT scheme=$SCHEME"
-
       - name: Build iOS unsigned
         run: |
           cd ios
-          SCHEME="${{ steps.discover.outputs.scheme }}"
+          # List available schemes
+          echo "=== Available schemes ==="
+          xcodebuild -workspace PixelForgeAI.xcworkspace -list 2>&1 || true
+          
+          # Try to find the correct scheme name
+          SCHEME=$(xcodebuild -workspace PixelForgeAI.xcworkspace -list -json 2>/dev/null | python3 -c "
+          import json, sys
+          try:
+              d = json.load(sys.stdin)
+              schemes = d.get('project', {}).get('schemes', [])
+              # Filter out Pods scheme
+              user_schemes = [s for s in schemes if s != 'Pods-PixelForgeAI']
+              if user_schemes:
+                  print(user_schemes[0])
+              elif schemes:
+                  print(schemes[0])
+          except Exception as e:
+              print(f'Error: {e}', file=sys.stderr)
+          " 2>/dev/null)
+          
+          echo "=== Using scheme: '$SCHEME' ==="
+          
+          # If scheme is still empty, use the workspace name as scheme
           if [ -z "$SCHEME" ]; then
-            # Fallback: try common scheme names
-            for S in "PixelForge AI" "PixelForgeAI" "pixelforgeapp" "PixelForgeApp"; do
-              if xcodebuild -workspace *.xcworkspace -scheme "$S" -showBuildSettings 2>/dev/null | head -1 | grep -q "Build"; then
-                SCHEME="$S"
-                break
-              fi
-            done
+            SCHEME="PixelForgeAI"
+            echo "Fallback scheme: $SCHEME"
           fi
-          echo "Building with scheme: $SCHEME"
           
           xcodebuild \
-            -workspace *.xcworkspace \
+            -workspace PixelForgeAI.xcworkspace \
             -scheme "$SCHEME" \
             -configuration Release \
             -destination 'generic/platform=iOS' \
@@ -124,7 +121,7 @@ jobs:
         run: |
           APP_DIR=$(find ios/build/Build/Products/Release-iphoneos -name "*.app" -type d | head -1)
           if [ -z "$APP_DIR" ]; then
-            echo "Error: .app not found"
+            echo "Error: .app not found, searching everywhere..."
             find ios/build -name "*.app" -type d 2>/dev/null
             exit 1
           fi
@@ -133,7 +130,7 @@ jobs:
           cp -r "$APP_DIR" /tmp/Payload/
           cd /tmp
           zip -r PixelForge-iOS-unsigned.ipa Payload
-          ls -la PixelForge-iOS-unsigned.ipa
+          ls -lh PixelForge-iOS-unsigned.ipa
 
       - uses: actions/upload-artifact@v4
         with:
