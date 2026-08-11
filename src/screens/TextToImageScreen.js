@@ -9,7 +9,7 @@ import {
 import { Colors, FontSize, Spacing, BorderRadius } from '../Theme';
 import * as api from '../api/api';
 
-const COST = 150;
+const COST = 110; // razrai 文生图消耗 110 积分
 
 export default function TextToImageScreen({ profile, onUpdateProfile }) {
   const [prompt, setPrompt] = useState('');
@@ -31,66 +31,85 @@ export default function TextToImageScreen({ profile, onUpdateProfile }) {
     setLoading(true);
     setResult(null);
     try {
-      const { data, status } = await api.generateImage({ prompt: prompt.trim(), negativePrompt: negPrompt.trim() });
+      const { data, status } = await api.generateImage({ 
+        prompt: prompt.trim(), 
+        negativePrompt: negPrompt.trim() || 'blurry, watermark, low quality',
+        width: 1080,
+        height: 1920,
+      });
 
       if (status !== 200 || data.error) {
-        Alert.alert('生成失败', data.error || '请求失败');
+        Alert.alert('生成失败', data.error || data.message || '请求失败');
         setLoading(false);
         return;
       }
 
-      // 更新积分
-      if (data.points_left !== undefined) {
-        onUpdateProfile({ ...profile, points: data.points_left });
+      // 扣减积分显示
+      if (profile) {
+        onUpdateProfile({ ...profile, points: (profile.points || 0) - COST });
       }
 
-      // 如果直接返回了图片 URL
-      if (data.imageUrl) {
-        setResult({ type: 'image', url: api.getImageUrl(data.imageUrl), status: 'COMPLETED' });
-        setLoading(false);
-        return;
-      }
-
-      // 否则需要轮询
-      if (data.id) {
+      // razrai 返回记录 ID，需要轮询
+      const recordId = data.id;
+      if (recordId) {
         setLoading(false);
         setPolling(true);
-        pollStatus(data.id);
+        pollStatus(recordId);
+      } else if (data.imageUrl) {
+        // 直接返回了图片 URL
+        setResult({ type: 'image', url: api.getImageUrl(data.imageUrl), status: 'COMPLETED' });
+        setLoading(false);
       } else {
         setLoading(false);
+        Alert.alert('错误', '未获取到任务 ID');
       }
     } catch (e) {
+      console.error('[TextToImage] 错误:', e);
       Alert.alert('错误', '网络异常');
       setLoading(false);
     }
   };
 
-  const pollStatus = async (razId) => {
+  const pollStatus = async (recordId) => {
     let attempts = 0;
     const maxAttempts = 60; // 最多轮询 3 分钟 (3s * 60)
     const interval = setInterval(async () => {
       attempts++;
       try {
-        const { data } = await api.getGenerationStatus(razId);
-        const status = data?.metadata?.generationStatus || data?.generationStatus;
-        if (status === 'COMPLETED') {
-          clearInterval(interval);
-          setPolling(false);
-          const imgPath = data.imageUrl || '';
-          setResult({ type: 'image', url: api.getImageUrl(imgPath), status: 'COMPLETED' });
-        } else if (status === 'FAILED') {
-          clearInterval(interval);
-          setPolling(false);
-          Alert.alert('生成失败', '图片生成失败，积分已退还');
-          const { data: prof } = await api.getProfile();
-          onUpdateProfile(prof);
+        const { data, status } = await api.getGenerationStatus(recordId);
+        
+        if (status === 200) {
+          const genStatus = data?.metadata?.generationStatus || data?.generationStatus;
+          
+          if (genStatus === 'COMPLETED') {
+            clearInterval(interval);
+            setPolling(false);
+            const imgPath = data.imageUrl || '';
+            setResult({ type: 'image', url: api.getImageUrl(imgPath), status: 'COMPLETED' });
+            // 刷新用户信息获取最新积分
+            const { data: prof } = await api.getProfile();
+            if (prof?.points !== undefined) {
+              onUpdateProfile(prof);
+            }
+          } else if (genStatus === 'FAILED') {
+            clearInterval(interval);
+            setPolling(false);
+            Alert.alert('生成失败', '图片生成失败，积分已退还');
+            const { data: prof } = await api.getProfile();
+            if (prof?.points !== undefined) {
+              onUpdateProfile(prof);
+            }
+          }
+          // 其他状态继续轮询
         }
+        
         if (attempts >= maxAttempts) {
           clearInterval(interval);
           setPolling(false);
-          Alert.alert('超时', '生成时间过长，请在历史记录中查看');
+          Alert.alert('超时', '生成时间过长，请稍后在历史记录中查看');
         }
       } catch (e) {
+        console.error('[Poll] 错误:', e);
         // 忽略单次轮询错误
       }
     }, 3000);
