@@ -74,6 +74,40 @@ jobs:
           cd ios
           pod install --repo-update
 
+      - name: Fix node path and build settings
+        run: |
+          # Ensure Xcode build phase can find node
+          NODE_PATH=$(which node)
+          echo "Node path: $NODE_PATH"
+          
+          # Create .xcode.env.local to override node path
+          cat > ios/.xcode.env.local << ENVEOF
+          export NODE_BINARY=$NODE_PATH
+          export ENTRY_FILE=index.js
+          ENVEOF
+          
+          # Also set in .xcode.env
+          cat > ios/.xcode.env << ENVEOF
+          export NODE_BINARY=$NODE_PATH
+          export ENTRY_FILE=index.js
+          ENVEOF
+          
+          echo "=== .xcode.env ==="
+          cat ios/.xcode.env
+          echo "=== .xcode.env.local ==="
+          cat ios/.xcode.env.local
+          
+          # Check if New Architecture is disabled in Podfile
+          echo "=== Podfile new arch check ==="
+          grep -i "new_arch\|RCT_NEW_ARCH" ios/Podfile || echo "(no new arch references found)"
+          
+          # Check generated AppDelegate moduleName
+          echo "=== AppDelegate ==="
+          for f in $(find ios -name "AppDelegate.mm" -o -name "AppDelegate.m" 2>/dev/null); do
+            echo "--- $f ---"
+            cat "$f"
+          done
+
       - name: Build iOS
         run: |
           cd ios
@@ -83,17 +117,6 @@ jobs:
           echo "=== Build Config ==="
           echo "Scheme: $APP_NAME | Workspace: $WORKSPACE"
           xcodebuild -version
-          
-          # Show generated native module name
-          for f in $(find . -name "AppDelegate.mm" -o -name "AppDelegate.m" 2>/dev/null); do
-            echo "--- $f moduleName ---"
-            grep -i "moduleName" "$f" || echo "(not found)"
-          done
-          
-          # Show Info.plist
-          PLIST=$(find . -path "*/$APP_NAME/Info.plist" | head -1)
-          [ -n "$PLIST" ] && /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$PLIST" 2>/dev/null
-          [ -n "$PLIST" ] && /usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$PLIST" 2>/dev/null
           
           xcodebuild \
             -workspace "$WORKSPACE" \
@@ -105,7 +128,14 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            build
+            build \
+            2>&1 | tee /tmp/xcodebuild.log
+          
+          echo "=== xcodebuild exit code: $? ==="
+          
+          # Check for bundle step in log
+          echo "=== Bundle step check ==="
+          grep -i "bundle.*react.*native\|react-native bundle\|hermesc\|main.jsbundle" /tmp/xcodebuild.log | tail -20 || echo "(no bundle references in log)"
 
       - name: Verify and create IPA
         run: |
@@ -125,20 +155,52 @@ jobs:
           file "$BINARY" 2>/dev/null
           lipo -info "$BINARY" 2>/dev/null || true
           
-          # JS bundle check
-          BUNDLE="$APP_DIR/main.jsbundle"
+          # JS bundle check - critical!
           echo "=== JS Bundle ==="
+          BUNDLE="$APP_DIR/main.jsbundle"
           if [ -f "$BUNDLE" ]; then
-            echo "Size: $(wc -c < "$BUNDLE") bytes"
-            xxd -l 8 "$BUNDLE"
+            BUNDLE_SIZE=$(wc -c < "$BUNDLE")
+            echo "Size: $BUNDLE_SIZE bytes"
+            # Check first bytes - should be JS or Hermes bytecode
+            echo "First 32 bytes hex:"
+            xxd -l 32 "$BUNDLE"
+            # Check if it looks like Hermes bytecode (starts with 0xC6 0x1F 0xD0)
+            FIRST3=$(xxd -l 3 -p "$BUNDLE")
+            if [ "$FIRST3" = "c61fd0" ]; then
+              echo "Format: Hermes bytecode ✓"
+            else
+              echo "Format: JavaScript source (not compiled)"
+            fi
           else
-            echo "MISSING!"
+            echo "MISSING! This will cause crash on launch!"
+            # Check if bundle exists elsewhere
+            find ios/build -name "main.jsbundle" 2>/dev/null || echo "No main.jsbundle found anywhere"
             exit 1
+          fi
+          
+          # Check for hermes bytecode files
+          echo "=== Hermes files ==="
+          find "$APP_DIR" -name "*.hbc" -o -name "hermes*" 2>/dev/null | head -10
+          
+          # Info.plist check
+          echo "=== Info.plist ==="
+          PLIST="$APP_DIR/Info.plist"
+          if [ -f "$PLIST" ]; then
+            /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$PLIST"
+            /usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$PLIST"
+            /usr/libexec/PlistBuddy -c "Print :CFBundleName" "$PLIST"
+            /usr/libexec/PlistBuddy -c "Print :UILaunchStoryboardName" "$PLIST" 2>/dev/null || echo "No LaunchStoryboard"
+          else
+            echo "Info.plist MISSING!"
           fi
           
           # Expo.plist check
           echo "=== Expo.plist ==="
-          [ -f "$APP_DIR/Expo.plist" ] && /usr/libexec/PlistBuddy -c "Print" "$APP_DIR/Expo.plist" 2>/dev/null || echo "MISSING"
+          if [ -f "$APP_DIR/Expo.plist" ]; then
+            /usr/libexec/PlistBuddy -c "Print" "$APP_DIR/Expo.plist"
+          else
+            echo "Expo.plist MISSING!"
+          fi
           
           # Create IPA
           rm -rf /tmp/Payload
