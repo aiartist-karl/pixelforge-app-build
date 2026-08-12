@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "PixelForge AI",
+    "name": "PixelForgeAI",
     "slug": "pixelforge-app",
-    "version": "1.0.0",
+    "version": "1.0.7",
     "orientation": "portrait",
     "icon": "./src/icon.png",
     "userInterfaceStyle": "light",
