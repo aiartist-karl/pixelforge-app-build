@@ -1,103 +1,68 @@
 /**
  * PixelForge AI Studio — React Native App
- * v1.0.8 - Added ErrorBoundary for crash debugging
  */
-import React, { useState, useEffect, Component } from 'react';
-import { View, Text, ScrollView, StyleSheet, StatusBar } from 'react-native';
+import { AppRegistry } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, StatusBar, Alert } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as api from './src/api/api';
 import AuthScreen from './src/screens/AuthScreen';
 import MainApp from './src/screens/MainApp';
 
-// Error Boundary - catches JS errors and shows on screen instead of crashing
-class ErrorBoundary extends Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null, errorInfo: null };
+// 全局错误处理
+ErrorUtils.setGlobalHandler((error, isFatal) => {
+  if (isFatal) {
+    Alert.alert('致命错误', error.message + '\n\n' + error.stack, [{text: '确定'}]);
   }
-  
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error: error.toString() };
-  }
-  
-  componentDidCatch(error, errorInfo) {
-    this.setState({ errorInfo: JSON.stringify(errorInfo, null, 2) });
-    console.error('App crashed:', error, errorInfo);
-  }
-  
-  render() {
-    if (this.state.hasError) {
-      return (
-        <View style={styles.errorContainer}>
-          <StatusBar barStyle="light-content" backgroundColor="#FF3B30" />
-          <Text style={styles.errorTitle}>App Error</Text>
-          <ScrollView style={styles.errorScroll}>
-            <Text style={styles.errorText}>{this.state.error}</Text>
-            {this.state.errorInfo && (
-              <Text style={styles.errorDetail}>{this.state.errorInfo}</Text>
-            )}
-          </ScrollView>
-          <Text style={styles.errorHint}>
-            Build: v1.0.8 | Bundle: PixelForgeAI
-          </Text>
-        </View>
-      );
-    }
-    return this.props.children;
-  }
-}
+  console.error('Global error:', error);
+});
 
-function AppContent() {
+function PixelForgeApp() {
   const [isAuth, setIsAuth] = useState(false);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [initError, setInitError] = useState(null);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
+  useEffect(() => { checkAuth(); }, []);
 
   const checkAuth = async () => {
     try {
-      const jwt = await api.getJWT();
-      if (jwt) {
+      const token = await api.getToken();
+      if (token) {
         const { data, status } = await api.getProfile();
-        if (status === 200) {
-          setProfile(data);
-          setIsAuth(true);
-        } else {
-          await api.logout();
-        }
+        if (status === 200) { setProfile(data); setIsAuth(true); }
+        else { await api.logout(); }
       }
-    } catch (e) {
-      console.log('Auth check failed:', e);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { console.log('Auth check failed:', e); setError(e.message); }
+    finally { setLoading(false); }
   };
 
   const handleLogin = async () => {
     const { data } = await api.getProfile();
-    setProfile(data);
-    setIsAuth(true);
+    setProfile(data); setIsAuth(true);
   };
 
   const handleLogout = async () => {
-    await api.logout();
-    setIsAuth(false);
-    setProfile(null);
+    await api.logout(); setIsAuth(false); setProfile(null);
   };
 
-  if (initError) {
+  if (loading) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorTitle}>Init Error</Text>
-        <Text style={styles.errorText}>{initError}</Text>
+      <View style={styles.center}>
+        <Text style={styles.logo}>PixelForge AI</Text>
+        <Text style={styles.sub}>加载中...</Text>
       </View>
     );
   }
 
-  if (loading) return <View style={styles.loading} />;
+  if (error) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.err}>启动错误</Text>
+        <Text style={styles.errMsg}>{error}</Text>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaProvider>
@@ -113,24 +78,15 @@ function AppContent() {
   );
 }
 
-export default function App() {
-  return (
-    <ErrorBoundary>
-      <AppContent />
-    </ErrorBoundary>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-  loading: { flex: 1, backgroundColor: '#fff' },
-  errorContainer: {
-    flex: 1, backgroundColor: '#1A1A1A', padding: 20,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  errorTitle: { color: '#FF3B30', fontSize: 20, fontWeight: '700', marginBottom: 16 },
-  errorScroll: { flex: 1, width: '100%' },
-  errorText: { color: '#FF6B6B', fontSize: 14, fontFamily: 'monospace', marginBottom: 12 },
-  errorDetail: { color: '#888', fontSize: 11, fontFamily: 'monospace' },
-  errorHint: { color: '#555', fontSize: 11, marginTop: 12 },
+  center: { flex: 1, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
+  logo: { fontSize: 24, fontWeight: 'bold', color: '#1A1A1A' },
+  sub: { fontSize: 14, color: '#888', marginTop: 8 },
+  err: { fontSize: 20, fontWeight: 'bold', color: '#FF3B30' },
+  errMsg: { fontSize: 13, color: '#666', marginTop: 12, padding: 16 },
 });
+
+//  关键：注册组件，让原生端能找到入口
+AppRegistry.registerComponent('main', () => PixelForgeApp);
+AppRegistry.registerComponent('PixelForgeAI', () => PixelForgeApp);
