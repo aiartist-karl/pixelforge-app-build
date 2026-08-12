@@ -50,7 +50,7 @@ jobs:
           retention-days: 30
 
   build-ios:
-    name: Build iOS IPA (unsigned)
+    name: Build iOS IPA
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -74,25 +74,47 @@ jobs:
           cd ios
           pod install --repo-update
 
-      - name: Build iOS unsigned
+      - name: Build iOS with ad-hoc signing
         run: |
           cd ios
-          # 从 app.json 获取 scheme name（即 expo.name）
           APP_NAME=$(node -e "console.log(require('../app.json').expo.name)")
           WORKSPACE=$(find . -maxdepth 1 -name "*.xcworkspace" -type d | head -1)
           
+          echo "=== Build Configuration ==="
           echo "App name (scheme): $APP_NAME"
           echo "Workspace: $WORKSPACE"
+          echo "Xcode version:"
+          xcodebuild -version
           
+          # Check generated native module name
+          if [ -f "PixelForgeAI/AppDelegate.mm" ]; then
+            echo "=== AppDelegate.mm moduleName ==="
+            grep -i "moduleName\|module_name" "PixelForgeAI/AppDelegate.mm" || echo "(not found in AppDelegate.mm)"
+          fi
+          if [ -f "PixelForgeAI/AppDelegate.h" ]; then
+            grep -i "moduleName\|module_name" "PixelForgeAI/AppDelegate.h" || echo "(not found in AppDelegate.h)"
+          fi
+          
+          # Check Info.plist
+          PLIST=$(find . -path "*/PixelForgeAI/Info.plist" | head -1)
+          if [ -n "$PLIST" ]; then
+            echo "=== Info.plist ==="
+            /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$PLIST" 2>/dev/null || echo "CFBundleIdentifier: (not found)"
+            /usr/libexec/PlistBuddy -c "Print :CFBundleName" "$PLIST" 2>/dev/null || echo "CFBundleName: (not found)"
+            /usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$PLIST" 2>/dev/null || echo "CFBundleExecutable: (not found)"
+          fi
+          
+          echo "=== Starting Build ==="
           xcodebuild \
             -workspace "$WORKSPACE" \
             -scheme "$APP_NAME" \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES \
+            PROVISIONING_PROFILE_SPECIFIER="" \
             COMPILER_INDEX_STORE_ENABLE=NO \
             build
 
@@ -107,23 +129,47 @@ jobs:
           echo "Found app: $APP_DIR"
           echo "Total app size: $(du -sh "$APP_DIR" | cut -f1)"
           
-          # 检查 JS bundle
-          BUNDLE=$(find "$APP_DIR" -name "main.jsbundle" -o -name "*.jsbundle" | head -1)
-          if [ -n "$BUNDLE" ]; then
-            echo "JS bundle: $BUNDLE ($(wc -c < "$BUNDLE") bytes)"
-          else
-            echo "WARNING: No JS bundle found!"
+          # Check code signature
+          echo "=== Code Signature ==="
+          codesign -dv "$APP_DIR" 2>&1 || echo "No signature"
+          
+          # Check binary architecture
+          echo "=== Binary Info ==="
+          BINARY=$(find "$APP_DIR" -maxdepth 1 -type f -perm +111 | head -1)
+          if [ -n "$BINARY" ]; then
+            echo "Binary: $BINARY"
+            file "$BINARY"
+            lipo -info "$BINARY" 2>/dev/null || true
           fi
           
-          # 打包 IPA
+          # Check JS bundle
+          BUNDLE=$(find "$APP_DIR" -name "main.jsbundle" | head -1)
+          if [ -n "$BUNDLE" ]; then
+            echo "JS bundle: $BUNDLE ($(wc -c < "$BUNDLE") bytes)"
+            # Verify it's valid Hermes bytecode (starts with magic bytes)
+            xxd -l 4 "$BUNDLE"
+          else
+            echo "ERROR: No JS bundle found!"
+            exit 1
+          fi
+          
+          # Check Expo.plist
+          if [ -f "$APP_DIR/Expo.plist" ]; then
+            echo "=== Expo.plist ==="
+            /usr/libexec/PlistBuddy -c "Print" "$APP_DIR/Expo.plist" 2>/dev/null || true
+          else
+            echo "WARNING: Expo.plist not found"
+          fi
+          
+          # Create IPA
           mkdir -p /tmp/Payload
           cp -r "$APP_DIR" /tmp/Payload/
           cd /tmp
-          zip -r PixelForge-iOS-unsigned.ipa Payload
-          ls -lh PixelForge-iOS-unsigned.ipa
+          zip -r PixelForge-iOS.ipa Payload
+          ls -lh PixelForge-iOS.ipa
 
       - uses: actions/upload-artifact@v4
         with:
           name: PixelForge-iOS-IPA
-          path: /tmp/PixelForge-iOS-unsigned.ipa
+          path: /tmp/PixelForge-iOS.ipa
           retention-days: 30
