@@ -2,9 +2,8 @@
  * PixelForge AI Studio — React Native App
  */
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, StatusBar, AppRegistry } from 'react-native';
+import { View, StyleSheet, StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import appJson from './app.json';
 import * as api from './src/api/api';
 import AuthScreen from './src/screens/AuthScreen';
 import MainApp from './src/screens/MainApp';
@@ -70,4 +69,3 @@ const styles = StyleSheet.create({
   loading:   { flex: 1, backgroundColor: '#fff' },
 });
 
-AppRegistry.registerComponent(appJson.expo.name, () => App);
