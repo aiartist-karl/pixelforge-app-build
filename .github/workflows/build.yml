@@ -69,16 +69,33 @@ jobs:
       - name: Expo Prebuild iOS
         run: npx expo prebuild --platform ios --clean
 
-      - name: Verify entry file and .xcode.env
+      - name: Diagnose iOS project
         run: |
-          echo "=== Check entry files ==="
-          ls -la index.js App.js
-          echo "=== Check .xcode.env ==="
-          cat .xcode.env
+          echo "=== Entry files ==="
+          ls -la index.js App.js .xcode.env 2>/dev/null
           echo "=== package.json main ==="
           node -e "console.log(require('./package.json').main)"
-          echo "=== List Xcode schemes ==="
-          cd ios && xcodebuild -list -workspace *.xcworkspace 2>/dev/null || echo "No workspace found"
+          echo "=== app.json name ==="
+          node -e "console.log(require('./app.json').expo.name)"
+          echo "=== iOS directory ==="
+          ls -la ios/
+          echo "=== Find .xcworkspace (directories only) ==="
+          find ios/ -maxdepth 1 -name "*.xcworkspace" -type d
+          echo "=== Find .xcodeproj (directories only) ==="
+          find ios/ -maxdepth 1 -name "*.xcodeproj" -type d
+          echo "=== List schemes ==="
+          WORKSPACE=$(find ios/ -maxdepth 1 -name "*.xcworkspace" -type d | head -1)
+          if [ -n "$WORKSPACE" ]; then
+            echo "Workspace: $WORKSPACE"
+            xcodebuild -list -workspace "$WORKSPACE"
+          else
+            echo "No .xcworkspace found!"
+            PROJECT=$(find ios/ -maxdepth 1 -name "*.xcodeproj" -type d | head -1)
+            if [ -n "$PROJECT" ]; then
+              echo "Falling back to project: $PROJECT"
+              xcodebuild -list -project "$PROJECT"
+            fi
+          fi
 
       - name: Install CocoaPods
         run: |
@@ -88,30 +105,55 @@ jobs:
       - name: Build iOS unsigned
         run: |
           cd ios
-          # Find the actual workspace and scheme
-          WORKSPACE=$(ls *.xcworkspace 2>/dev/null | head -1)
-          SCHEME=$(xcodebuild -list -workspace "$WORKSPACE" 2>/dev/null | grep -A10 "Schemes:" | tail -n +2 | head -1 | xargs)
+          # Find workspace or project
+          WORKSPACE=$(find . -maxdepth 1 -name "*.xcworkspace" -type d | head -1)
+          PROJECT=$(find . -maxdepth 1 -name "*.xcodeproj" -type d | head -1)
           
-          if [ -z "$SCHEME" ]; then
-            echo "Error: No scheme found"
-            xcodebuild -list -workspace "$WORKSPACE"
+          echo "Workspace: ${WORKSPACE:-none}"
+          echo "Project: ${PROJECT:-none}"
+          
+          if [ -n "$WORKSPACE" ]; then
+            # Get the first scheme from the workspace
+            SCHEME=$(xcodebuild -list -workspace "$WORKSPACE" 2>/dev/null | sed -n '/Schemes:/,/^$/p' | grep -v "Schemes:" | grep -v "^$" | head -1 | xargs)
+            echo "Scheme: $SCHEME"
+            
+            if [ -z "$SCHEME" ]; then
+              echo "ERROR: No scheme found in workspace"
+              xcodebuild -list -workspace "$WORKSPACE"
+              exit 1
+            fi
+            
+            xcodebuild \
+              -workspace "$WORKSPACE" \
+              -scheme "$SCHEME" \
+              -configuration Release \
+              -destination 'generic/platform=iOS' \
+              -derivedDataPath build \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGN_IDENTITY="" \
+              COMPILER_INDEX_STORE_ENABLE=NO \
+              build
+          elif [ -n "$PROJECT" ]; then
+            SCHEME=$(xcodebuild -list -project "$PROJECT" 2>/dev/null | sed -n '/Schemes:/,/^$/p' | grep -v "Schemes:" | grep -v "^$" | head -1 | xargs)
+            echo "Scheme: $SCHEME"
+            
+            xcodebuild \
+              -project "$PROJECT" \
+              -scheme "$SCHEME" \
+              -configuration Release \
+              -destination 'generic/platform=iOS' \
+              -derivedDataPath build \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGN_IDENTITY="" \
+              COMPILER_INDEX_STORE_ENABLE=NO \
+              build
+          else
+            echo "ERROR: No workspace or project found in ios/"
+            ls -la
             exit 1
           fi
-          
-          echo "Workspace: $WORKSPACE"
-          echo "Scheme: $SCHEME"
-          
-          xcodebuild \
-            -workspace "$WORKSPACE" \
-            -scheme "$SCHEME" \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            build
 
       - name: Verify JS bundle in app
         run: |
@@ -123,18 +165,17 @@ jobs:
           fi
           echo "Found app: $APP_DIR"
           
-          # Check if JS bundle exists
+          # Check JS bundle
           BUNDLE=$(find "$APP_DIR" -name "main.jsbundle" -o -name "index.bundle" -o -name "*.jsbundle" | head -1)
           if [ -n "$BUNDLE" ]; then
             echo "JS bundle found: $BUNDLE"
             ls -lh "$BUNDLE"
             echo "Bundle size: $(wc -c < "$BUNDLE") bytes"
           else
-            echo "WARNING: No JS bundle found in app! App will crash on launch."
+            echo "WARNING: No JS bundle found in app!"
             ls -la "$APP_DIR"
           fi
           
-          # Total app size
           echo "Total app size: $(du -sh "$APP_DIR" | cut -f1)"
 
       - name: Create unsigned IPA
