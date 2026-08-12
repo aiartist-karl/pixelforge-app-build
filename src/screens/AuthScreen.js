@@ -1,46 +1,43 @@
 /**
- * 登录页面 — 自动使用后端账号登录
+ * 登录页面 — 手动输入邮箱密码登录
  */
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, ActivityIndicator, Alert,
+  View, Text, StyleSheet, TextInput, TouchableOpacity,
+  ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { Colors, FontSize, Spacing, BorderRadius } from '../Theme';
 import * as api from '../api/api';
 
 export default function AuthScreen({ onSuccess }) {
-  const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState('正在连接服务器...');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    autoLogin();
-  }, []);
-
-  const autoLogin = async () => {
+  const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      Alert.alert('提示', '请输入邮箱和密码');
+      return;
+    }
     setLoading(true);
     try {
-      setStatus('正在登录...');
-      // 使用后端账号自动登录
-      const { data, status } = await api.login('', '');
-      
+      const { data, status } = await api.login(email.trim(), password);
       if (status === 200 && data.token) {
-        setStatus('登录成功');
-        setTimeout(() => onSuccess(), 500);
+        onSuccess();
       } else {
-        setStatus('登录失败');
-        Alert.alert('错误', data.error || '登录失败');
-        setLoading(false);
+        Alert.alert('登录失败', data.error || '请检查邮箱和密码');
       }
     } catch (e) {
-      console.error('[Auth] 登录失败:', e);
-      setStatus('网络错误');
-      Alert.alert('错误', '网络连接失败，请检查网络');
+      Alert.alert('网络错误', '连接服务器失败，请检查网络');
+    } finally {
       setLoading(false);
     }
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
       <View style={styles.card}>
         {/* Logo */}
         <View style={styles.logoWrap}>
@@ -51,80 +48,107 @@ export default function AuthScreen({ onSuccess }) {
           <Text style={styles.subtitle}>AI 图像 · 视频创作平台</Text>
         </View>
 
-        {/* 加载状态 */}
-        <View style={styles.loadingWrap}>
+        {/* 输入框 */}
+        <TextInput
+          style={styles.input}
+          placeholder="邮箱"
+          placeholderTextColor="#999"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoComplete="email"
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="密码"
+          placeholderTextColor="#999"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          autoComplete="password"
+        />
+
+        {/* 登录按钮 */}
+        <TouchableOpacity
+          style={[styles.btn, loading && styles.btnDisabled]}
+          onPress={handleLogin}
+          disabled={loading}
+        >
           {loading ? (
-            <>
-              <ActivityIndicator size="large" color={Colors.primary} />
-              <Text style={styles.statusText}>{status}</Text>
-            </>
+            <ActivityIndicator color="#fff" />
           ) : (
-            <>
-              <Text style={styles.errorText}>连接失败</Text>
-              <Text style={styles.retryBtn} onPress={autoLogin}>点击重试</Text>
-            </>
+            <Text style={styles.btnText}>登 录</Text>
           )}
-        </View>
+        </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.bg,
+    backgroundColor: '#fff',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: 24,
   },
   card: {
-    backgroundColor: Colors.bg,
+    backgroundColor: '#fff',
   },
   logoWrap: {
     alignItems: 'center',
-    marginBottom: Spacing.xl,
+    marginBottom: 32,
   },
   logoIcon: {
     width: 80,
     height: 80,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.primary,
+    borderRadius: 16,
+    backgroundColor: '#1A1A1A',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: Spacing.md,
+    marginBottom: 16,
   },
   logoText: {
-    color: Colors.primaryText,
+    color: '#fff',
     fontSize: 36,
     fontWeight: '700',
   },
   title: {
-    fontSize: FontSize.xxl,
+    fontSize: 24,
     fontWeight: '700',
-    color: Colors.text,
+    color: '#1A1A1A',
     marginBottom: 4,
   },
   subtitle: {
-    fontSize: FontSize.sm,
-    color: Colors.text3,
+    fontSize: 14,
+    color: '#888',
   },
-  loadingWrap: {
+  input: {
+    height: 48,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#1A1A1A',
+    marginBottom: 12,
+    backgroundColor: '#f9f9f9',
+  },
+  btn: {
+    height: 48,
+    borderRadius: 10,
+    backgroundColor: '#1A1A1A',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: Spacing.xl,
+    marginTop: 8,
   },
-  statusText: {
-    marginTop: Spacing.md,
-    fontSize: FontSize.md,
-    color: Colors.text2,
+  btnDisabled: {
+    opacity: 0.6,
   },
-  errorText: {
-    fontSize: FontSize.md,
-    color: Colors.error,
-    marginBottom: Spacing.md,
-  },
-  retryBtn: {
-    fontSize: FontSize.md,
-    color: Colors.primary,
+  btnText: {
+    color: '#fff',
+    fontSize: 16,
     fontWeight: '600',
   },
 });
