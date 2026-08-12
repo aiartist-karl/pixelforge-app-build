@@ -1,10 +1,10 @@
 /**
  * PixelForge AI — API 客户端
- * 对接代理站 http://47.116.29.140:8880
+ * 对接代理站 http://47.116.29.140/pf-api/
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE = 'http://47.116.29.140:8880';
+const API_BASE = 'http://47.116.29.140/pf-api';
 const TOKEN_KEY = '@pixelforge:token';
 
 // ── Token 管理 ───────────────────────────────────────────────
@@ -47,16 +47,9 @@ function del(path) {
   return request(path, { method: 'DELETE' });
 }
 
-// ── 认证 ─────────────────────────────────────────────────────
-export async function register(email, password) {
-  const { data, status } = await postJSON('/api/register', { email, password });
-  if (data.accessToken) { data.token = data.accessToken; await setToken(data.accessToken); }
-  if (data.message && !data.error) data.error = data.message;
-  return { data, status };
-}
-
+// ─ 认证 ─────────────────────────────────────────────────────
 export async function login(email, password) {
-  const { data, status } = await postJSON('/api/login', { email, password });
+  const { data, status } = await postJSON('/login', { email, password });
   if (data.accessToken) { data.token = data.accessToken; await setToken(data.accessToken); }
   if (data.message && !data.error) data.error = data.message;
   return { data, status };
@@ -68,12 +61,12 @@ export async function logout() {
 
 // ── 用户 ─────────────────────────────────────────────────────
 export async function getProfile() {
-  return get('/api/profile');
+  return get('/profile');
 }
 
 // ── 文生图 (JSON body) ───────────────────────────────────────
 export async function generateImage({ prompt, negativePrompt = '', width = 1024, height = 1024 }) {
-  return postJSON('/api/generate', { prompt, negativePrompt, width, height });
+  return postJSON('/generate', { prompt, negativePrompt, width, height });
 }
 
 // ── 图生图 (multipart/form-data) ─────────────────────────────
@@ -84,7 +77,6 @@ export async function generateMultiImage({ prompt, imageUri, negativePrompt = ''
   formData.append('prompt', prompt);
   if (negativePrompt) formData.append('negativePrompt', negativePrompt);
 
-  // RN FormData 图片格式
   const filename = imageUri.split('/').pop() || 'photo.jpg';
   const ext = filename.split('.').pop().toLowerCase();
   const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
@@ -98,7 +90,7 @@ export async function generateMultiImage({ prompt, imageUri, negativePrompt = ''
   const headers = { 'Content-Type': 'multipart/form-data' };
   if (token) headers['X-Token'] = token;
 
-  const res = await fetch(`${API_BASE}/api/multi-generate`, {
+  const res = await fetch(`${API_BASE}/multi-generate`, {
     method: 'POST',
     headers,
     body: formData,
@@ -127,7 +119,7 @@ export async function generateVideo({ prompt, imageUri }) {
   const headers = { 'Content-Type': 'multipart/form-data' };
   if (token) headers['X-Token'] = token;
 
-  const res = await fetch(`${API_BASE}/api/video-generate`, {
+  const res = await fetch(`${API_BASE}/video-generate`, {
     method: 'POST',
     headers,
     body: formData,
@@ -138,34 +130,29 @@ export async function generateVideo({ prompt, imageUri }) {
 
 // ── 生成状态 ─────────────────────────────────────────────────
 export async function getGenerationStatus(razId) {
-  return get(`/api/status/${razId}`);
+  return get(`/status/${razId}`);
 }
 
 // ── 历史记录 ─────────────────────────────────────────────────
 export async function getHistory() {
-  return get('/api/history');
+  return get('/history');
 }
 
 export async function deleteHistory(genId) {
-  return del(`/api/history/${genId}`);
-}
-
-// ── 卡密兑换 ─────────────────────────────────────────────────
-export async function redeemCard(code) {
-  return postJSON('/api/redeem', { code });
+  return del(`/history/${genId}`);
 }
 
 // ── 图片 URL 构造 ────────────────────────────────────────────
 export function getImageUrl(path) {
   if (!path) return null;
   if (path.startsWith('http')) return path;
-  return `${API_BASE}/api/img/${path}`;
+  return `${API_BASE}/img/${path}`;
 }
 
 export function getVideoUrl(path) {
   if (!path) return null;
   if (path.startsWith('http')) return path;
-  return `${API_BASE}/api/video-file/${path}`;
+  return `${API_BASE}/video-file/${path}`;
 }
 
 export { API_BASE };
