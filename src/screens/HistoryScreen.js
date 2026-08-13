@@ -52,17 +52,27 @@ export default function HistoryScreen() {
   };
 
   const handleSaveImage = async () => {
-    if (!selectedImage?.result_url) return;
+    if (!selectedImage?.imageUrl) return;
     
     try {
       const imageUrl = api.getImageUrl(selectedImage.imageUrl);
+      if (!imageUrl) {
+        Alert.alert('错误', '图片 URL 无效');
+        return;
+      }
+      
+      // 先下载图片到本地缓存
+      const localUri = FileSystem.cacheDirectory + 'pixelforge_share.jpg';
+      const { uri } = await FileSystem.downloadAsync(imageUrl, localUri);
+      
+      // 分享本地文件
       const shareResult = await Share.share({
-        url: imageUrl,
+        url: uri,
         message: `PixelForge 生成: ${selectedImage.prompt}`,
       });
       
       if (shareResult.action === Share.sharedAction) {
-        Alert.alert('提示', '长按图片可保存到相册');
+        Alert.alert('提示', '在分享菜单中选择"保存图片"即可保存到相册');
       }
     } catch (e) {
       console.error('Save failed:', e);
@@ -134,7 +144,7 @@ export default function HistoryScreen() {
             <Text style={styles.modalCloseText}>✕</Text>
           </TouchableOpacity>
 
-          {selectedImage?.result_url && (
+          {selectedImage?.imageUrl && (
             <Image
               source={{ uri: api.getImageUrl(selectedImage.imageUrl) }}
               style={styles.fullImage}
