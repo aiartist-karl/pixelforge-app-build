@@ -1,17 +1,20 @@
 /**
- * 历史记录 Tab
+ * 历史记录 Tab - 支持查看大图和下载
  */
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, Image, StyleSheet,
-  RefreshControl, TouchableOpacity, Alert,
+  RefreshControl, TouchableOpacity, Alert, Modal, Share,
 } from 'react-native';
 import { Colors, FontSize, Spacing, BorderRadius } from '../Theme';
 import * as api from '../api/api';
+import * as FileSystem from 'expo-file-system';
 
 export default function HistoryScreen() {
   const [records, setRecords] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
     loadHistory();
@@ -43,14 +46,48 @@ export default function HistoryScreen() {
     ]);
   };
 
+  const handleViewImage = (item) => {
+    setSelectedImage(item);
+    setModalVisible(true);
+  };
+
+  const handleSaveImage = async () => {
+    if (!selectedImage?.result_url) return;
+    
+    try {
+      const imageUrl = api.getImageUrl(selectedImage.result_url);
+      const shareResult = await Share.share({
+        url: imageUrl,
+        message: `PixelForge 生成: ${selectedImage.prompt}`,
+      });
+      
+      if (shareResult.action === Share.sharedAction) {
+        Alert.alert('提示', '长按图片可保存到相册');
+      }
+    } catch (e) {
+      console.error('Save failed:', e);
+      Alert.alert('错误', '保存失败，请重试');
+    }
+  };
+
+  const handleCloseModal = () => {
+    setModalVisible(false);
+    setSelectedImage(null);
+  };
+
   const renderItem = ({ item }) => (
     <View style={styles.card}>
       {item.result_url && (
-        <Image
-          source={{ uri: api.getImageUrl(item.result_url) }}
-          style={styles.image}
-          resizeMode="cover"
-        />
+        <TouchableOpacity 
+          onPress={() => handleViewImage(item)}
+          style={styles.imageContainer}
+        >
+          <Image
+            source={{ uri: api.getImageUrl(item.result_url) }}
+            style={styles.image}
+            resizeMode="cover"
+          />
+        </TouchableOpacity>
       )}
       <View style={styles.info}>
         <Text style={styles.prompt} numberOfLines={2}>{item.prompt}</Text>
@@ -81,6 +118,43 @@ export default function HistoryScreen() {
         }
         contentContainerStyle={records.length === 0 ? styles.emptyContainer : null}
       />
+
+      {/* 全屏图片预览 Modal */}
+      <Modal
+        visible={modalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCloseModal}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity 
+            style={styles.modalCloseBtn}
+            onPress={handleCloseModal}
+          >
+            <Text style={styles.modalCloseText}>✕</Text>
+          </TouchableOpacity>
+
+          {selectedImage?.result_url && (
+            <Image
+              source={{ uri: api.getImageUrl(selectedImage.result_url) }}
+              style={styles.fullImage}
+              resizeMode="contain"
+            />
+          )}
+
+          <View style={styles.modalInfo}>
+            <Text style={styles.modalPrompt} numberOfLines={3}>
+              {selectedImage?.prompt}
+            </Text>
+            <TouchableOpacity 
+              style={styles.saveBtn}
+              onPress={handleSaveImage}
+            >
+              <Text style={styles.saveBtnText}>💾 分享/保存</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -100,6 +174,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
   },
+  imageContainer: {
+    width: 80,
+    height: 80,
+  },
   image: { width: 80, height: 80 },
   info: { flex: 1, padding: Spacing.sm },
   prompt: { fontSize: FontSize.md, color: Colors.text, marginBottom: 4 },
@@ -110,4 +188,56 @@ const styles = StyleSheet.create({
   statusPending: { color: '#FF9500' },
   deleteBtn: { padding: Spacing.md },
   deleteText: { fontSize: 20, color: Colors.error },
+  
+  // Modal 样式
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseBtn: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  modalCloseText: {
+    fontSize: 24,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  fullImage: {
+    width: '90%',
+    height: '60%',
+    borderRadius: BorderRadius.md,
+  },
+  modalInfo: {
+    width: '90%',
+    marginTop: Spacing.lg,
+    alignItems: 'center',
+  },
+  modalPrompt: {
+    fontSize: FontSize.md,
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: Spacing.md,
+  },
+  saveBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+  },
+  saveBtnText: {
+    color: '#fff',
+    fontSize: FontSize.md,
+    fontWeight: '600',
+  },
 });
