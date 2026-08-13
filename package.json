@@ -1,6 +1,6 @@
 {
   "name": "pixelforge-app",
-  "version": "1.0.8",
+  "version": "1.0.7",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
@@ -12,6 +12,7 @@
     "expo": "~52.0.0",
     "expo-image-picker": "~16.0.0",
     "expo-file-system": "~18.0.0",
+    "expo-media-library": "~17.1.0",
     "expo-clipboard": "~7.0.0",
     "expo-status-bar": "~2.0.0",
     "react": "18.3.1",
