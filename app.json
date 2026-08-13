@@ -2,7 +2,7 @@
   "expo": {
     "name": "PixelForgeAI",
     "slug": "pixelforge-app",
-    "version": "1.0.9",
+    "version": "1.0.7",
     "orientation": "portrait",
     "icon": "./src/icon.png",
     "userInterfaceStyle": "light",
@@ -14,10 +14,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.pixelforge.app",
-      "newArchEnabled": false,
       "infoPlist": {
-        "NSCameraUsageDescription": "用于拍摄参考图片进行AI创作",
-        "NSPhotoLibraryUsageDescription": "用于选择参考图片进行AI创作",
+        "NSCameraUsageDescription": "\u7528\u4e8e\u62cd\u6444\u53c2\u8003\u56fe\u7247\u8fdb\u884cAI\u521b\u4f5c",
+        "NSPhotoLibraryUsageDescription": "\u7528\u4e8e\u9009\u62e9\u53c2\u8003\u56fe\u7247\u8fdb\u884cAI\u521b\u4f5c",
+        "NSPhotoLibraryAddUsageDescription": "\u7528\u4e8e\u4fdd\u5b58AI\u751f\u6210\u7684\u56fe\u7247\u5230\u76f8\u518c",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
         },
