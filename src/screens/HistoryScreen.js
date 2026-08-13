@@ -55,7 +55,7 @@ export default function HistoryScreen() {
     if (!selectedImage?.result_url) return;
     
     try {
-      const imageUrl = api.getImageUrl(selectedImage.result_url);
+      const imageUrl = api.getImageUrl(selectedImage.imageUrl);
       const shareResult = await Share.share({
         url: imageUrl,
         message: `PixelForge 生成: ${selectedImage.prompt}`,
@@ -77,13 +77,13 @@ export default function HistoryScreen() {
 
   const renderItem = ({ item }) => (
     <View style={styles.card}>
-      {item.result_url && (
+      {item.imageUrl && (
         <TouchableOpacity 
           onPress={() => handleViewImage(item)}
           style={styles.imageContainer}
         >
           <Image
-            source={{ uri: api.getImageUrl(item.result_url) }}
+            source={{ uri: api.getImageUrl(item.imageUrl) }}
             style={styles.image}
             resizeMode="cover"
           />
@@ -136,7 +136,7 @@ export default function HistoryScreen() {
 
           {selectedImage?.result_url && (
             <Image
-              source={{ uri: api.getImageUrl(selectedImage.result_url) }}
+              source={{ uri: api.getImageUrl(selectedImage.imageUrl) }}
               style={styles.fullImage}
               resizeMode="contain"
             />
