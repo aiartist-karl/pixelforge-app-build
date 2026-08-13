@@ -4,11 +4,12 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, Image, StyleSheet,
-  RefreshControl, TouchableOpacity, Alert, Modal, Share,
+  RefreshControl, TouchableOpacity, Alert, Modal, Share, Platform,
 } from 'react-native';
 import { Colors, FontSize, Spacing, BorderRadius } from '../Theme';
 import * as api from '../api/api';
 import * as FileSystem from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library';
 
 export default function HistoryScreen() {
   const [records, setRecords] = useState([]);
@@ -52,31 +53,44 @@ export default function HistoryScreen() {
   };
 
   const handleSaveImage = async () => {
-    if (!selectedImage?.imageUrl) return;
+    const imgPath = selectedImage?.result_url;
+    if (!imgPath) return;
     
     try {
-      const imageUrl = api.getImageUrl(selectedImage.imageUrl);
+      const imageUrl = api.getImageUrl(imgPath);
       if (!imageUrl) {
         Alert.alert('错误', '图片 URL 无效');
         return;
       }
       
       // 先下载图片到本地缓存
-      const localUri = FileSystem.cacheDirectory + 'pixelforge_share.jpg';
-      const { uri } = await FileSystem.downloadAsync(imageUrl, localUri);
+      const localUri = FileSystem.cacheDirectory + `pixelforge_${Date.now()}.jpg`;
+      const downloadRes = await FileSystem.downloadAsync(imageUrl, localUri);
       
-      // 分享本地文件
-      const shareResult = await Share.share({
-        url: uri,
-        message: `PixelForge 生成: ${selectedImage.prompt}`,
-      });
-      
-      if (shareResult.action === Share.sharedAction) {
-        Alert.alert('提示', '在分享菜单中选择"保存图片"即可保存到相册');
+      if (!downloadRes.uri || downloadRes.status !== 200) {
+        Alert.alert('错误', '图片下载失败');
+        return;
+      }
+
+      // iOS: 保存到相册
+      if (Platform.OS === 'ios') {
+        const { status } = await MediaLibrary.requestPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('权限不足', '需要相册权限才能保存图片');
+          return;
+        }
+        await MediaLibrary.saveToLibraryAsync(downloadRes.uri);
+        Alert.alert('已保存', '图片已保存到相册');
+      } else {
+        // Android: 用 Share
+        await Share.share({
+          url: downloadRes.uri,
+          message: `PixelForge: ${selectedImage?.prompt}`,
+        });
       }
     } catch (e) {
       console.error('Save failed:', e);
-      Alert.alert('错误', '保存失败，请重试');
+      Alert.alert('错误', `保存失败: ${e.message}`);
     }
   };
 
@@ -87,13 +101,13 @@ export default function HistoryScreen() {
 
   const renderItem = ({ item }) => (
     <View style={styles.card}>
-      {item.imageUrl && (
+      {item.result_url && (
         <TouchableOpacity 
           onPress={() => handleViewImage(item)}
           style={styles.imageContainer}
         >
           <Image
-            source={{ uri: api.getImageUrl(item.imageUrl) }}
+            source={{ uri: api.getImageUrl(item.result_url) }}
             style={styles.image}
             resizeMode="cover"
           />
@@ -144,9 +158,9 @@ export default function HistoryScreen() {
             <Text style={styles.modalCloseText}>✕</Text>
           </TouchableOpacity>
 
-          {selectedImage?.imageUrl && (
+          {selectedImage?.result_url && (
             <Image
-              source={{ uri: api.getImageUrl(selectedImage.imageUrl) }}
+              source={{ uri: api.getImageUrl(selectedImage.result_url) }}
               style={styles.fullImage}
               resizeMode="contain"
             />
