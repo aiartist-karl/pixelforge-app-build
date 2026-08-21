@@ -1,7 +1,7 @@
 /**
  * 图生视频 Tab
  * POST /tools/i2v-video/generate (FormData)
- * 3600 积分/次 · 约90秒出视频
+ * 5000 积分/次 · 约90秒出视频
  */
 import React, { useState } from 'react';
 import {
@@ -13,7 +13,7 @@ import { Colors, FontSize, Spacing, BorderRadius } from '../Theme';
 import * as ImagePicker from 'expo-image-picker';
 import * as api from '../api/api';
 
-const COST = 3600;
+const COST = 5000;
 
 export default function ImageToVideoScreen({ profile, onUpdateProfile }) {
   const [prompt, setPrompt] = useState('');
@@ -248,3 +248,4 @@ const styles = StyleSheet.create({
   videoLinkText: { fontSize: FontSize.md, color: Colors.info, fontWeight: '600' },
   videoUrl: { fontSize: FontSize.xs, color: Colors.text3, marginTop: 6, textAlign: 'center' },
 });
+
