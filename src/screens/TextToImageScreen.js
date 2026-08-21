@@ -1,5 +1,5 @@
 /**
- * 文生图 Tab — 支持多结果网格、AsyncStorage 持久化、Modal 全屏预览
+ * 文生图 Tab — 分辨率选择 + 多结果网格 + Modal 双指缩放预览
  */
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -11,12 +11,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, FontSize, Spacing, BorderRadius } from '../Theme';
 import * as api from '../api/api';
 
-const COST = 110;
 const STORAGE_KEY = '@pixelforge:t2i_results';
 const MAX_RESULTS = 20;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_GAP = 8;
 const CARD_SIZE = (SCREEN_WIDTH - GRID_GAP * 3) / 2;
+
+// 分辨率选项
+const RESOLUTIONS = [
+  { label: '512×512',   width: 512,  height: 512,  cost: 50,  tag: '方' },
+  { label: '768×768',   width: 768,  height: 768,  cost: 80,  tag: '方' },
+  { label: '1024×1024', width: 1024, height: 1024, cost: 110, tag: '方' },
+  { label: '1080×1920', width: 1080, height: 1920, cost: 150, tag: '竖' },
+  { label: '1920×1080', width: 1920, height: 1080, cost: 150, tag: '横' },
+];
 
 let _idCounter = Date.now();
 const genTempId = () => `t2i_${_idCounter++}`;
@@ -29,6 +37,7 @@ export default function TextToImageScreen({ profile, onUpdateProfile }) {
   const [results, setResults] = useState([]);
   const [previewItem, setPreviewItem] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [selectedRes, setSelectedRes] = useState(RESOLUTIONS[2]); // 默认 1024x1024
   const pollingRef = useRef({});
 
   useEffect(() => {
@@ -79,8 +88,9 @@ export default function TextToImageScreen({ profile, onUpdateProfile }) {
       Alert.alert('提示', '请输入画面描述');
       return;
     }
-    if (profile?.points < COST) {
-      Alert.alert('积分不足', `文生图需要 ${COST} 积分，当前剩余 ${profile?.points || 0}`);
+    const cost = selectedRes.cost;
+    if (profile?.points < cost) {
+      Alert.alert('积分不足', `当前分辨率需要 ${cost} 积分，剩余 ${profile?.points || 0}`);
       return;
     }
 
@@ -91,6 +101,7 @@ export default function TextToImageScreen({ profile, onUpdateProfile }) {
       status: 'PENDING',
       url: null,
       createdAt: Date.now(),
+      resolution: selectedRes.label,
     };
     
     setResults(prev => {
@@ -105,8 +116,9 @@ export default function TextToImageScreen({ profile, onUpdateProfile }) {
       const { data, status } = await api.generateImage({ 
         prompt: prompt.trim(), 
         negativePrompt: negPrompt.trim() || 'blurry, watermark, low quality',
-        width: 1080,
-        height: 1920,
+        width: selectedRes.width,
+        height: selectedRes.height,
+        pf_cost: cost,
       });
 
       if (status !== 200 || data.error) {
@@ -116,8 +128,9 @@ export default function TextToImageScreen({ profile, onUpdateProfile }) {
         return;
       }
 
+      // 先本地扣减显示
       if (profile) {
-        onUpdateProfile({ ...profile, points: (profile.points || 0) - COST });
+        onUpdateProfile({ ...profile, points: (profile.points || 0) - cost });
       }
 
       const recordId = data.id;
@@ -166,6 +179,7 @@ export default function TextToImageScreen({ profile, onUpdateProfile }) {
               status: 'COMPLETED',
               remoteId: recordId,
             });
+            // 从服务器同步最新积分
             const { data: prof } = await api.getProfile();
             if (prof?.points !== undefined) onUpdateProfile(prof);
           } else if (genStatus === 'FAILED') {
@@ -266,6 +280,29 @@ export default function TextToImageScreen({ profile, onUpdateProfile }) {
           onChangeText={setNegPrompt}
           multiline
         />
+
+        {/* 分辨率选择器 */}
+        <Text style={styles.label}>输出尺寸</Text>
+        <View style={styles.resContainer}>
+          {RESOLUTIONS.map((res) => {
+            const isActive = selectedRes.label === res.label;
+            return (
+              <TouchableOpacity
+                key={res.label}
+                style={[styles.resBtn, isActive && styles.resBtnActive]}
+                onPress={() => setSelectedRes(res)}
+              >
+                <Text style={[styles.resText, isActive && styles.resTextActive]}>
+                  {res.label}
+                </Text>
+                <Text style={[styles.resCost, isActive && styles.resCostActive]}>
+                  {res.cost}分
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
         <TouchableOpacity
           style={[styles.btn, styles.btnPrimary, isWorking && styles.btnDisabled]}
           onPress={handleGenerate}
@@ -274,7 +311,7 @@ export default function TextToImageScreen({ profile, onUpdateProfile }) {
           {isWorking ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.btnText}>生成  ·  {COST} 积分</Text>
+            <Text style={styles.btnText}>生成 · {selectedRes.cost} 积分</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -294,6 +331,7 @@ export default function TextToImageScreen({ profile, onUpdateProfile }) {
         </View>
       )}
 
+      {/* 全屏预览 Modal — 支持双指缩放 */}
       <Modal
         visible={modalVisible}
         transparent={true}
@@ -309,11 +347,23 @@ export default function TextToImageScreen({ profile, onUpdateProfile }) {
           </TouchableOpacity>
 
           {previewItem?.url && (
-            <Image
-              source={{ uri: previewItem.url }}
-              style={styles.fullImage}
-              resizeMode="contain"
-            />
+            <ScrollView
+              style={styles.zoomScroll}
+              contentContainerStyle={styles.zoomContent}
+              maximumZoomScale={4}
+              minimumZoomScale={1}
+              showsHorizontalScrollIndicator={false}
+              showsVerticalScrollIndicator={false}
+              bounces={true}
+              bouncesZoom={true}
+              centerContent={true}
+            >
+              <Image
+                source={{ uri: previewItem.url }}
+                style={styles.fullImage}
+                resizeMode="contain"
+              />
+            </ScrollView>
           )}
 
           {previewItem?.prompt && (
@@ -331,7 +381,7 @@ export default function TextToImageScreen({ profile, onUpdateProfile }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  form: { maxHeight: '45%' },
+  form: { maxHeight: '50%' },
   formContent: { padding: Spacing.md },
   label: {
     fontSize: FontSize.sm,
@@ -349,6 +399,42 @@ const styles = StyleSheet.create({
     color: Colors.text,
     backgroundColor: Colors.surface,
     height: 100,
+  },
+  // 分辨率选择器
+  resContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  resBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    minWidth: 80,
+  },
+  resBtnActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  resText: {
+    fontSize: FontSize.sm,
+    color: Colors.text2,
+    fontWeight: '600',
+  },
+  resTextActive: {
+    color: Colors.primaryText,
+  },
+  resCost: {
+    fontSize: FontSize.xs,
+    color: Colors.text3,
+    marginTop: 2,
+  },
+  resCostActive: {
+    color: 'rgba(255,255,255,0.8)',
   },
   btn: {
     height: 50,
@@ -449,10 +535,18 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
   },
+  zoomScroll: {
+    width: '100%',
+    height: '65%',
+  },
+  zoomContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   fullImage: {
-    width: '90%',
-    height: '60%',
-    borderRadius: BorderRadius.md,
+    width: '100%',
+    height: '100%',
   },
   modalInfo: {
     width: '90%',
