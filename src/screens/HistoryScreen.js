@@ -1,10 +1,11 @@
 /**
- * 历史记录 Tab — 支持查看大图、单条删除、一键清空、用户隔离
+ * 历史记录 Tab — 支持查看大图(双指缩放)、单条删除、一键清空、用户隔离
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, Image, StyleSheet,
   RefreshControl, TouchableOpacity, Alert, Modal, Share, Platform,
+  ScrollView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, FontSize, Spacing, BorderRadius } from '../Theme';
@@ -211,16 +212,35 @@ export default function HistoryScreen() {
         ListEmptyComponent={<View style={styles.empty}><Text style={styles.emptyText}>暂无生成记录</Text></View>}
         contentContainerStyle={records.length === 0 ? styles.emptyContainer : null}
       />
+      {/* 全屏预览 Modal — 支持双指缩放 */}
       <Modal visible={modalVisible} transparent={true} animationType="fade" onRequestClose={handleCloseModal}>
         <View style={styles.modalOverlay}>
           <TouchableOpacity style={styles.modalCloseBtn} onPress={handleCloseModal}>
             <Text style={styles.modalCloseText}>✕</Text>
           </TouchableOpacity>
           {selectedImage?.result_url && (
-            <Image source={{ uri: api.getImageUrl(selectedImage.result_url) }} style={styles.fullImage} resizeMode="contain" />
+            <ScrollView
+              style={styles.zoomScroll}
+              contentContainerStyle={styles.zoomContent}
+              maximumZoomScale={4}
+              minimumZoomScale={1}
+              showsHorizontalScrollIndicator={false}
+              showsVerticalScrollIndicator={false}
+              bounces={true}
+              bouncesZoom={true}
+              centerContent={true}
+            >
+              <Image
+                source={{ uri: api.getImageUrl(selectedImage.result_url) }}
+                style={styles.fullImage}
+                resizeMode="contain"
+              />
+            </ScrollView>
           )}
           <View style={styles.modalInfo}>
-            <Text style={styles.modalPrompt} numberOfLines={3}>{selectedImage?.prompt}</Text>
+            {selectedImage?.prompt && (
+              <Text style={styles.modalPrompt} numberOfLines={3}>{selectedImage?.prompt}</Text>
+            )}
             <TouchableOpacity style={styles.saveBtn} onPress={handleSaveImage}>
               <Text style={styles.saveBtnText}>💾 分享/保存</Text>
             </TouchableOpacity>
@@ -289,7 +309,16 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   modalCloseText: { fontSize: 24, color: '#fff', fontWeight: 'bold' },
-  fullImage: { width: '90%', height: '60%', borderRadius: BorderRadius.md },
+  zoomScroll: {
+    width: '100%',
+    height: '55%',
+  },
+  zoomContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullImage: { width: '100%', height: '100%' },
   modalInfo: { width: '90%', marginTop: Spacing.lg, alignItems: 'center' },
   modalPrompt: { fontSize: FontSize.md, color: '#fff', textAlign: 'center', marginBottom: Spacing.md },
   saveBtn: {
