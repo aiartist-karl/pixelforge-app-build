@@ -5,13 +5,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, Image, StyleSheet,
   RefreshControl, TouchableOpacity, Alert, Modal, Share, Platform,
-  ScrollView,
+  ScrollView, Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Sharing from 'expo-sharing';
 import { Colors, FontSize, Spacing, BorderRadius } from '../Theme';
 import * as api from '../api/api';
 import * as FileSystem from 'expo-file-system';
-import * as MediaLibrary from 'expo-media-library';
 
 const DELETED_KEY_PREFIX = '@pixelforge:deleted_history:';
 
@@ -141,25 +141,23 @@ export default function HistoryScreen() {
         Alert.alert('错误', '图片 URL 无效');
         return;
       }
+      // 下载到本地缓存
       const localUri = FileSystem.cacheDirectory + `pixelforge_${Date.now()}.jpg`;
       const downloadRes = await FileSystem.downloadAsync(imageUrl, localUri);
       if (!downloadRes.uri || downloadRes.status !== 200) {
         Alert.alert('错误', '图片下载失败');
         return;
       }
-      if (Platform.OS === 'ios') {
-        const { status } = await MediaLibrary.requestPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('权限不足', '需要相册权限才能保存图片');
-          return;
-        }
-        await MediaLibrary.saveToLibraryAsync(downloadRes.uri);
-        Alert.alert('已保存', '图片已保存到相册');
-      } else {
-        await Share.share({
-          url: downloadRes.uri,
-          message: `PixelForge: ${selectedImage?.prompt}`,
+      // 使用 expo-sharing 分享/保存
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(downloadRes.uri, {
+          mimeType: 'image/jpeg',
+          dialogTitle: '保存或分享图片',
         });
+      } else {
+        // fallback: 打开图片链接
+        Linking.openURL(imageUrl);
       }
     } catch (e) {
       console.error('Save failed:', e);
