@@ -1,7 +1,7 @@
 /**
  * 多图生图 Tab
  * POST /tools/multi-image/generate (FormData)
- * 350 积分/次
+ * 1000 积分/次
  */
 import React, { useState } from 'react';
 import {
@@ -12,7 +12,7 @@ import { Colors, FontSize, Spacing, BorderRadius } from '../Theme';
 import * as ImagePicker from 'expo-image-picker';
 import * as api from '../api/api';
 
-const COST = 350;
+const COST = 1000;
 
 export default function ImageToImageScreen({ profile, onUpdateProfile }) {
   const [prompt, setPrompt] = useState('');
@@ -245,3 +245,4 @@ const styles = StyleSheet.create({
   pollingWrap: { alignItems: 'center', marginTop: Spacing.lg, padding: Spacing.lg },
   pollingText: { marginTop: Spacing.md, fontSize: FontSize.md, color: Colors.text3 },
 });
+
