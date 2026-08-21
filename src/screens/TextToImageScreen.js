@@ -274,7 +274,7 @@ export default function TextToImageScreen({ profile, onUpdateProfile }) {
         />
         <Text style={styles.label}>反向提示词（可选）</Text>
         <TextInput
-          style={[styles.promptInput, { height: 60 }]}
+          style={[styles.promptInput, { height: 44 }]}
           placeholder="不想出现的元素..."
           placeholderTextColor={Colors.text3}
           value={negPrompt}
@@ -382,14 +382,14 @@ export default function TextToImageScreen({ profile, onUpdateProfile }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  form: { maxHeight: '50%' },
+  form: { maxHeight: '60%' },
   formContent: { padding: Spacing.md },
   label: {
     fontSize: FontSize.sm,
     fontWeight: '600',
     color: Colors.text2,
-    marginBottom: 6,
-    marginTop: Spacing.md,
+    marginBottom: 4,
+    marginTop: Spacing.sm,
   },
   promptInput: {
     borderWidth: 1,
@@ -399,7 +399,7 @@ const styles = StyleSheet.create({
     fontSize: FontSize.md,
     color: Colors.text,
     backgroundColor: Colors.surface,
-    height: 100,
+    height: 80,
   },
   // 分辨率选择器
   resContainer: {
@@ -408,8 +408,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   resBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
     borderColor: Colors.border,
