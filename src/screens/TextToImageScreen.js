@@ -17,13 +17,14 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_GAP = 8;
 const CARD_SIZE = (SCREEN_WIDTH - GRID_GAP * 3) / 2;
 
-// 分辨率选项
+// 分辨率选项（3档，竖屏+横屏，300/400/500积分）
 const RESOLUTIONS = [
-  { label: '512×512',   width: 512,  height: 512,  cost: 50,  tag: '方' },
-  { label: '768×768',   width: 768,  height: 768,  cost: 80,  tag: '方' },
-  { label: '1024×1024', width: 1024, height: 1024, cost: 110, tag: '方' },
-  { label: '1080×1920', width: 1080, height: 1920, cost: 150, tag: '竖' },
-  { label: '1920×1080', width: 1920, height: 1080, cost: 150, tag: '横' },
+  { label: '768×1024',  width: 768,  height: 1024, cost: 300, tag: '竖' },
+  { label: '1024×768',  width: 1024, height: 768,  cost: 300, tag: '横' },
+  { label: '1080×1440', width: 1080, height: 1440, cost: 400, tag: '竖' },
+  { label: '1440×1080', width: 1440, height: 1080, cost: 400, tag: '横' },
+  { label: '1080×1920', width: 1080, height: 1920, cost: 500, tag: '竖' },
+  { label: '1920×1080', width: 1920, height: 1080, cost: 500, tag: '横' },
 ];
 
 let _idCounter = Date.now();
@@ -37,7 +38,7 @@ export default function TextToImageScreen({ profile, onUpdateProfile }) {
   const [results, setResults] = useState([]);
   const [previewItem, setPreviewItem] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
-  const [selectedRes, setSelectedRes] = useState(RESOLUTIONS[2]); // 默认 1024x1024
+  const [selectedRes, setSelectedRes] = useState(RESOLUTIONS[0]); // 默认 768x1024 竖屏
   const pollingRef = useRef({});
 
   useEffect(() => {
@@ -559,3 +560,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
