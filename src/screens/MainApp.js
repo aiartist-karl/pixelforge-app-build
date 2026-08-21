@@ -1,8 +1,8 @@
 /**
- * 主界面 — 底部 Tab 导航
+ * 主界面 — 底部 Tab 导航（修复顶部状态栏遮挡）
  */
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, FontSize, Spacing, BorderRadius } from '../Theme';
 import TextToImageScreen from './TextToImageScreen';
@@ -36,8 +36,9 @@ export default function MainApp({ profile, onUpdateProfile, onLogout }) {
 
   return (
     <View style={styles.container}>
-      {/* 顶部 Header */}
-      <View style={styles.header}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.bg} translucent={false} />
+      {/* 顶部 Header — 用 paddingTop: insets.top 避开状态栏 */}
+      <View style={[styles.header, { paddingTop: insets.top }]}>
         <View style={styles.headerLeft}>
           <View style={styles.logoIcon}>
             <Text style={styles.logoText}>P</Text>
@@ -90,7 +91,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.md,
     paddingBottom: Spacing.sm,
     backgroundColor: Colors.bg,
     borderBottomWidth: 1,
